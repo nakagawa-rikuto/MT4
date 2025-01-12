@@ -19,7 +19,7 @@ void PrintMatrix(const KamataEngine::Vector2& position, const KamataEngine::Matr
 	for (int i = 0; i < 4; ++i) {
 		Novice::ScreenPrintf(static_cast<int>(position.x), static_cast<int>(position.y + 20 * (i + 1)),
 			" %5.3f, %5.3f, %5.3f, %5.3f",
-			matrix.m[i][0], matrix.m[i][1], matrix.m[i][2], matrix.m[i][3]);
+			matrix.m[0][i], matrix.m[1][i], matrix.m[2][i], matrix.m[3][i]);
 	}
 }
 
