@@ -1,8 +1,7 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
 #include <Novice.h>
-#include <string>
-#include <stdio.h>
+#include <algorithm>
 
 #include "math/Vector2.h"
 #include "math/Vector3.h"
@@ -19,7 +18,7 @@ void PrintMatrix(const KamataEngine::Vector2& position, const KamataEngine::Matr
 	for (int i = 0; i < 4; ++i) {
 		Novice::ScreenPrintf(static_cast<int>(position.x), static_cast<int>(position.y + 20 * (i + 1)),
 			" %5.3f, %5.3f, %5.3f, %5.3f",
-			matrix.m[i][0], matrix.m[i][1], matrix.m[i][2], matrix.m[i][3]);
+			matrix.m[0][i], matrix.m[1][i], matrix.m[2][i], matrix.m[3][i]);
 	}
 }
 
@@ -175,6 +174,96 @@ namespace KamataEngine {
 
 		return rotationMatrix;
 	}
+
+	///-------------------------------------------/// 
+	/// ある方向からある方向への回転
+	///-------------------------------------------///
+	Matrix4x4 DirectionToDirection(const Vector3& from, const Vector3& to) {
+		// 入力ベクトルが正規化されていない場合は正規化する
+		Vector3 fromNormalized = Normalize(from);
+		Vector3 toNormalized = Normalize(to);
+
+		// ベクトルがほぼ同じ場合は単位行列を返す
+		float dotProduct = fromNormalized.x * toNormalized.x + fromNormalized.y * toNormalized.y + fromNormalized.z * toNormalized.z;
+		if (fabs(dotProduct - 1.0f) < 1e-6f) {
+			Matrix4x4 identity;
+			for (int i = 0; i < 4; ++i) {
+				for (int j = 0; j < 4; ++j) {
+					identity.m[i][j] = (i == j) ? 1.0f : 0.0f;
+				}
+			}
+			return identity;
+		}
+
+		// ベクトルが反対方向の場合は適当な回転軸を使用して180度回転
+		if (fabs(dotProduct + 1.0f) < 1e-6f) {
+			Vector3 axis = { 1.0f, 0.0f, 0.0f };
+			if(fabs(fromNormalized.x) < fabs(fromNormalized.y) && fabs(fromNormalized.x) < fabs(fromNormalized.z)) {
+				axis = { 0.0f, -fromNormalized.z, fromNormalized.y }; // X 軸に垂直
+			} else if (fabs(fromNormalized.y) < fabs(fromNormalized.z)) {
+				axis = { -fromNormalized.z, 0.0f, fromNormalized.x }; // Y 軸に垂直
+			} else {
+				axis = { -fromNormalized.y, fromNormalized.x, 0.0f }; // Z 軸に垂直
+			}
+			float length = Length(axis);
+			axis = { axis.x / length, axis.y / length, axis.z / length };
+
+			Matrix4x4 result = {};
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                result.m[i][j] = (i == j) ? -1.0f : 0.0f;
+            }
+        }
+		axis = Normalize(axis);
+		float c = -1.0f;
+		float s = 0.0f;
+		float t = 1.0f - c;
+
+		Matrix4x4 rotation = {};
+		rotation.m[0][0] = t * axis.x * axis.x + c;
+		rotation.m[0][1] = t * axis.x * axis.y - s * axis.z;
+		rotation.m[0][2] = t * axis.x * axis.z + s * axis.y;
+		rotation.m[1][0] = t * axis.x * axis.y + s * axis.z;
+		rotation.m[1][1] = t * axis.y * axis.y + c;
+		rotation.m[1][2] = t * axis.y * axis.z - s * axis.x;
+		rotation.m[2][0] = t * axis.x * axis.z - s * axis.y;
+		rotation.m[2][1] = t * axis.y * axis.z + s * axis.x;
+		rotation.m[2][2] = t * axis.z * axis.z + c;
+		rotation.m[3][3] = 1.0f;
+
+		return rotation;
+		}
+
+		/// ===一般的なケース: 回転軸と角度を計算=== ///
+		Vector3 rotationAxis = {
+			fromNormalized.y * toNormalized.z - fromNormalized.z * toNormalized.y,
+			fromNormalized.z * toNormalized.x - fromNormalized.x * toNormalized.z,
+			fromNormalized.x * toNormalized.y - fromNormalized.y * toNormalized.x
+		};
+		float axisLength = Length(rotationAxis);
+		rotationAxis = { rotationAxis.x / axisLength, rotationAxis.y / axisLength, rotationAxis.z / axisLength };
+
+		float angle = acosf(std::fmax(-1.0f, std::fmin(1.0f, dotProduct)));
+
+		// 回転行列を生成 (ロドリゲスの回転公式を使用)
+		Matrix4x4 rotation = {};
+		float c = cosf(angle);
+		float s = sinf(angle);
+		float t = 1.0f - c;
+
+		rotation.m[0][0] = t * rotationAxis.x * rotationAxis.x + c;
+		rotation.m[0][1] = t * rotationAxis.x * rotationAxis.y - s * rotationAxis.z;
+		rotation.m[0][2] = t * rotationAxis.x * rotationAxis.z + s * rotationAxis.y;
+		rotation.m[1][0] = t * rotationAxis.x * rotationAxis.y + s * rotationAxis.z;
+		rotation.m[1][1] = t * rotationAxis.y * rotationAxis.y + c;
+		rotation.m[1][2] = t * rotationAxis.y * rotationAxis.z - s * rotationAxis.x;
+		rotation.m[2][0] = t * rotationAxis.x * rotationAxis.z - s * rotationAxis.y;
+		rotation.m[2][1] = t * rotationAxis.y * rotationAxis.z + s * rotationAxis.x;
+		rotation.m[2][2] = t * rotationAxis.z * rotationAxis.z + c;
+		rotation.m[3][3] = 1.0f;
+
+		return rotation;
+	}
 }
 
 // Windowsアプリでのエントリーポイント(main関数)
@@ -187,9 +276,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	char keys[256] = {0};
 	char preKeys[256] = {0};
 
-	KamataEngine::Vector3 axis = { 1.0f, 1.0f, 1.0f };
-	float angle = 0.44f;
-	KamataEngine::Matrix4x4 rotateMatrix = MakeRotateAxisAngle(axis, angle);
+	KamataEngine::Vector3 from0 = { 1.0f, 0.7f, 0.5f };
+	KamataEngine::Vector3 to0 = { -from0.x, -from0.y, -from0.z };
+	KamataEngine::Vector3 from1 = { -0.6f, 0.9f, 0.2f };
+	KamataEngine::Vector3 to1 = { 0.4f, 0.7f, -0.5f };
+	KamataEngine::Matrix4x4 rotateMatrix0 = KamataEngine::DirectionToDirection(
+		{ 1.0f, 0.0f, 0.0f }, { -1.0f, 0.0f, 0.0f });
+	KamataEngine::Matrix4x4 rotateMatrix1 = KamataEngine::DirectionToDirection(from0, to0);
+	KamataEngine::Matrix4x4 rotateMatrix2 = KamataEngine::DirectionToDirection(from1, to1);
+
+
 
 	// ウィンドウの×ボタンが押されるまでループ
 	while (Novice::ProcessMessage() == 0) {
@@ -212,7 +308,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		/// ↓描画処理ここから
 		///
 
-		PrintMatrix({0.0f, 0.0f}, rotateMatrix, "rotateMatrix");
+		PrintMatrix({0.0f, 0.0f}, rotateMatrix0, "rotateMatrix0");
+		PrintMatrix({ 0.0f, 20.0f * 5.0f }, rotateMatrix1, "rotateMatrix1");
+		PrintMatrix({ 0.0f, 20.0f * 10.0f }, rotateMatrix2, "rotateMatrix2");
 
 		///
 		/// ↑描画処理ここまで
