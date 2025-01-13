@@ -10,6 +10,7 @@
 
 const char kWindowTitle[] = "LE2B_18_ナカガワ_リクト";
 
+// Matrxi4x4のprintf用関数
 void PrintMatrix(const KamataEngine::Vector2& position, const KamataEngine::Matrix4x4& matrix, const char* name) {
 	// 行列の名前を描画
 	Novice::ScreenPrintf(static_cast<int>(position.x), static_cast<int>(position.y), name);
@@ -22,6 +23,100 @@ void PrintMatrix(const KamataEngine::Vector2& position, const KamataEngine::Matr
 	}
 }
 
+#pragma region Quaternion
+///-------------------------------------------/// 
+/// Quaternion
+///-------------------------------------------///
+struct Quaternion {
+	float x;
+	float y;
+	float z;
+	float w;
+};
+
+///-------------------------------------------/// 
+/// Quaternionの積
+///-------------------------------------------///
+Quaternion Multiply(const Quaternion& lhs, const Quaternion& rhs) {
+	return {
+		lhs.w * rhs.x + lhs.x * rhs.w + lhs.y * rhs.z - lhs.z * rhs.y,
+		lhs.w * rhs.y - lhs.x * rhs.z + lhs.y * rhs.w + lhs.z * rhs.x,
+		lhs.w * rhs.z + lhs.x * rhs.y - lhs.y * rhs.x + lhs.z * rhs.w,
+		lhs.w * rhs.w - lhs.x * rhs.x - lhs.y * rhs.y - lhs.z * rhs.z
+	};
+}
+
+///-------------------------------------------/// 
+/// 単位Quaternionを返す
+///-------------------------------------------///
+Quaternion IdentityQuaternion() {
+	return { 0.0f, 0.0f, 0.0f, 1.0f };
+}
+
+///-------------------------------------------/// 
+/// 共役Quaternionを返す
+///-------------------------------------------///
+Quaternion Conjugate(const Quaternion& quaternion) {
+	return {
+		-quaternion.x,
+		-quaternion.y,
+		-quaternion.z,
+		quaternion.w
+	};
+}
+
+///-------------------------------------------/// 
+/// Quaternionのnormを返す
+///-------------------------------------------///
+float Norm(const Quaternion& quaternion) {
+	return sqrtf(quaternion.x * quaternion.x +
+		quaternion.y * quaternion.y +
+		quaternion.z * quaternion.z +
+		quaternion.w * quaternion.w);
+}
+
+///-------------------------------------------/// 
+/// 正規化したQuaternionを返す
+///-------------------------------------------///
+Quaternion Normalize(const Quaternion& quaternion) {
+	float norm = Norm(quaternion);
+	if (norm == 0.0f) {
+		// Avoid division by zero
+		return IdentityQuaternion();
+	}
+	return {
+		quaternion.x / norm,
+		quaternion.y / norm,
+		quaternion.z / norm,
+		quaternion.w / norm
+	};
+}
+
+///-------------------------------------------/// 
+/// 逆Quaternionを返す
+///-------------------------------------------///
+Quaternion Inverse(const Quaternion& quaternion) {
+	float normSquared = quaternion.x * quaternion.x +
+		quaternion.y * quaternion.y +
+		quaternion.z * quaternion.z +
+		quaternion.w * quaternion.w;
+	if (normSquared == 0.0f) {
+		// Avoid division by zero
+		return IdentityQuaternion();
+	}
+	Quaternion conjugate = Conjugate(quaternion);
+	return {
+		conjugate.x / normSquared,
+		conjugate.y / normSquared,
+		conjugate.z / normSquared,
+		conjugate.w / normSquared
+	};
+}
+#pragma endregion
+
+///-------------------------------------------/// 
+/// Vector2, Vector3, Vector4, Matrix4x4
+///-------------------------------------------///
 namespace KamataEngine {
 
 	///=====================================================///
@@ -276,16 +371,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	char keys[256] = {0};
 	char preKeys[256] = {0};
 
-	KamataEngine::Vector3 from0 = { 1.0f, 0.7f, 0.5f };
-	KamataEngine::Vector3 to0 = { -from0.x, -from0.y, -from0.z };
-	KamataEngine::Vector3 from1 = { -0.6f, 0.9f, 0.2f };
-	KamataEngine::Vector3 to1 = { 0.4f, 0.7f, -0.5f };
-	KamataEngine::Matrix4x4 rotateMatrix0 = KamataEngine::DirectionToDirection(
-		{ 1.0f, 0.0f, 0.0f }, { -1.0f, 0.0f, 0.0f });
-	KamataEngine::Matrix4x4 rotateMatrix1 = KamataEngine::DirectionToDirection(from0, to0);
-	KamataEngine::Matrix4x4 rotateMatrix2 = KamataEngine::DirectionToDirection(from1, to1);
-
-
+	/// ===Quaternion=== ///
+	Quaternion q1 = { 2.0f, 3.0f, 4.0f, 1.0f };
+	Quaternion q2 = { 1.0f, 3.0f, 5.0f, 2.0f };
+	Quaternion identity = IdentityQuaternion();
+	Quaternion conj = Conjugate(q1);
+	Quaternion inv = Inverse(q1);
+	Quaternion normal = Normalize(q1);
+	Quaternion mul1 = Multiply(q1, q2);
+	Quaternion mul2 = Multiply(q2, q1);
+	float norm = Norm(q1);
 
 	// ウィンドウの×ボタンが押されるまでループ
 	while (Novice::ProcessMessage() == 0) {
@@ -308,9 +403,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		/// ↓描画処理ここから
 		///
 
-		PrintMatrix({0.0f, 0.0f}, rotateMatrix0, "rotateMatrix0");
-		PrintMatrix({ 0.0f, 20.0f * 5.0f }, rotateMatrix1, "rotateMatrix1");
-		PrintMatrix({ 0.0f, 20.0f * 10.0f }, rotateMatrix2, "rotateMatrix2");
+		Novice::ScreenPrintf(0, 0, "%5.3f  %5.3f  %5.3f  %5.3f        : Identity", identity.x, identity.y, identity.z, identity.w);
+		Novice::ScreenPrintf(0, 20, "%5.3f  %5.3f  %5.3f  %5.3f     : Conjugate", conj.x, conj.y, conj.z, conj.w);
+		Novice::ScreenPrintf(0, 20 * 2, "%5.3f  %5.3f  %5.3f  %5.3f     : Inverse", inv.x, inv.y, inv.z, inv.w);
+		Novice::ScreenPrintf(0, 20 * 3, "%5.3f  %5.3f  %5.3f  %5.3f        : Normalize", normal.x, normal.y, normal.z, normal.w);
+		Novice::ScreenPrintf(0, 20 * 4, "%5.3f  %5.3f  %5.3f  %5.3f     : Multiply(q1, q2)", mul1.x, mul1.y, mul1.z, mul1.w);
+		Novice::ScreenPrintf(0, 20 * 5, "%5.3f  %5.3f  %5.3f  %5.3f    : Multiply(q2, q1)", mul2.x, mul2.y, mul2.z, mul2.w);
+		Novice::ScreenPrintf(0, 20 * 6, "%5.3f                             : Norm", norm);
 
 		///
 		/// ↑描画処理ここまで
